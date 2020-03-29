@@ -5,10 +5,10 @@ The functions include in api_call.lsp:
 
 _ get_from_web: Conect to server and obtain responses.
 
-_ get_DRF_token: Only that. Using the get_from_web function obtain a DRF token.
+_ get_DRF_token: Only that. Using the get_from_web function to obtain a DRF token.
 
 
-The functions uncluded in json_util-v2.lsp:
+The functions included in json_util-v2.lsp:
 
 _ json_to_list: Return a list with the elements of a string in json format
 
