@@ -9,7 +9,7 @@
 ;;
 ;;Original Code by: diegomcas, 2020/03/25
 ;-----------------------------------------------------------------------------------------
-(defun str_replace(str patt repl_to / pos inc)
+(defun str_replace(str patt repl_to / pos inc init_search)
 
   (if (not str) (setq str ""))
   (if (and (not patt) (< (strlen patt) 1)) (setq patt " "))
@@ -17,9 +17,15 @@
 
   (setq pos (vl-string-search patt str))
   (setq inc (1+ (- (strlen repl_to) (strlen patt))))
+  (princ "pos= ") (princ pos) (princ "\n")
+  (princ "inc= ") (princ inc) (princ "\n")
   (while pos
     (setq str (vl-string-subst repl_to patt str pos))
-    (setq pos (vl-string-search patt str (+ pos inc)))
+    (setq init_search (+ pos inc))
+    (if (< init_search 0)
+      (setq init_search 0)
+    )
+    (setq pos (vl-string-search patt str init_search))
   )
   str
 )
@@ -88,6 +94,8 @@
           (progn
             (setq res (str_replace res " , " "," ))
             (setq res (str_replace res " : " ":" ))
+            (setq res (str_replace res "( <ARRAY> "  "["))
+            (setq res (str_replace res " </ARRAY> )"  "]"))
           )
         )
         (setq lst_pair (list str_name res))
@@ -102,6 +110,11 @@
       
       ;Case -> Reading a name {NAME : value}
       ((and (eq state 'Obj) (eq (type res) 'STR))
+        (setq res (str_replace res " , " "," ))
+        (setq res (str_replace res " : " ":" ))
+        (setq res (str_replace res "( <ARRAY> "  "["))
+        (setq res (str_replace res " </ARRAY> )"  "]"))
+
         (setq str_name res)
         (setq state 'Obj_Name)
       )
