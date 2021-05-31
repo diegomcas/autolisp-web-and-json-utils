@@ -1,3 +1,7 @@
+;*************************************************************************************************
+;* INICIO api_call.lsp
+;*************************************************************************************************
+
 ;;----------------------------------------------------------------------------------
 ;;get_from_web function.
 ;;Conect to a url as a API service and get the response
@@ -36,9 +40,9 @@
 ;;
 ;; Modified by (me ;-) ) diegomcas@gmail.com 2020/03/08
 ;;----------------------------------------------------------------------------------
-(defun get_from_web (str_url str_method str_post_data lst_headers
-                     / web_obj server_response err_obj response_text)
-
+(defun dmc:web:get_from_web (str_url str_method str_post_data lst_headers
+                     / web_obj server_response err_obj response_body status content_type)
+  
   (if (not str_method)
     (setq str_method "GET")
   )
@@ -59,7 +63,7 @@
   (foreach header_tup lst_headers
     (vlax-invoke-method web_obj 'SetRequestHeader (car header_tup) (cadr header_tup))
   )
-
+  
   ;; Sending request
   (if str_post_data
     (setq err_obj (vl-catch-all-apply 'vlax-invoke-method (list web_obj 'Send str_post_data)))
@@ -68,26 +72,38 @@
 
   (if (null (vl-catch-all-error-p err_obj))
     (progn
-      ;; Applying corrections to characters utf codes
-      (setq response_text
-        (vl-list->string
-          (list_latin_utf_to_ascii
-            (vlax-safearray->list
-              (vlax-variant-value
-                (vlax-get-property web_obj 'ResponseBody)
+      (setq status (vlax-get-property web_obj 'Status))
+      
+      ; (princ "status: ")(princ status)(princ "\n")
+
+      (if (and (>= status 200) (< status 300)) ;; Applying corrections to characters utf codes
+        (setq response_body
+          (vl-list->string
+            (dmc:web:list_latin_utf_to_ascii
+              (vlax-safearray->list
+                (vlax-variant-value
+                  (vlax-get-property web_obj 'ResponseBody)
+                )
               )
             )
           )
         )
       )
+      
+      ; (princ "response_body: ")(princ response_body)(princ "\n")
 
+      (setq content_type (vl-catch-all-apply 'vlax-invoke-method (list web_obj 'GetResponseHeader "Content-Type")))
+      (if (not (null (vl-catch-all-error-p content_type)))
+        (setq content_type "Undefinied")
+      )
+      
       (setq server_response
         (list
-          (cons 'Status (vlax-get-property web_obj 'Status))
+          (cons 'Status status)
           (cons 'StatusText (vlax-get-property web_obj 'StatusText))
           (cons 'ResponseText (vlax-get-property web_obj 'ResponseText))
-          (cons 'ResponseAnsiText response_text)
-          (cons 'Content-Type (vlax-invoke-method web_obj 'GetResponseHeader "Content-Type"))
+          (cons 'ResponseAnsiText response_body)
+          (cons 'Content-Type content_type)
           (cons 'ErrorValue nil)
         )
       )
@@ -105,6 +121,9 @@
       )
     )
   )
+
+  (if web_obj (vlax-release-object web_obj))
+  
   server_response 
 )
 
@@ -118,7 +137,7 @@
 ;;
 ;;Original Code by: diegomcas, 2020/03/25
 ;;----------------------------------------------------------------------------------
-(defun list_latin_utf_to_ascii (lst_code / lst_translate cnt code_ext new_code)
+(defun dmc:web:list_latin_utf_to_ascii (lst_code / lst_translate cnt code_ext new_code)
   ; lst_code = Lista con los codigos del string
   (setq cnt 0)
   (while (< cnt (length lst_code))
@@ -155,11 +174,11 @@
 ;;
 ;;Original Code by: diegomcas, 2020/03/25
 ;;----------------------------------------------------------------------------------
-(defun get_DRF_token(url_to_api-token-auth username password / response_list token)
+(defun dmc:web:get_DRF_token (url_to_api-token-auth username password / response_list token)
   (setq response_list
-    (get_from_web url_to_api-token-auth
+    (dmc:web:get_from_web url_to_api-token-auth
       "POST"
-      (list_to_json
+      (dmc:json:list_to_json
         (list
           (list "username" username)
           (list "password" password)
@@ -173,7 +192,7 @@
     (progn
       (if (equal (cdr (assoc 'Status response_list)) 200)
         (progn
-          (setq token (cadr (car (json_to_list (cdr (assoc 'ResponseText response_list))))))
+          (setq token (cadr (car (dmc:json:json_to_list (cdr (assoc 'ResponseText response_list))))))
          )
       )
     )
@@ -182,3 +201,56 @@
   (list response_list token)
 )
 
+;;----------------------------------------------------------------------------------
+;;send_file function.
+;;Use binary_file function and get_from_web function to send files to API
+;;Params:
+;;       -url_to_api: The url to send the file
+;;       -file_name: The local file name to send
+;;
+;;RETURN: A list with the complete response of the function (get_from_web)
+;;
+;;Original Code by: diegomcas, 2021/02/05
+;;----------------------------------------------------------------------------------
+(defun dmc:web:send_file (url_to_api file_name / response_upload binary_file)
+  (if (findfile file_name)
+		(progn
+      (setq binary_file (dmc:web:read_binary_stream file_name 0))
+      (setq response_upload (dmc:web:get_from_web url_to_api "PUT" binary_file
+        ((list
+          (list "Authorization" (strcat "Token " GLOBAL_TOKEN))
+          (list "Content-Type" "application/octet-stream")
+        ))
+      ))
+    )
+    (progn
+    )
+  )
+)
+
+(defun dmc:web:read_binary_stream (file_name len / ADOStream result )
+  (setq result
+    (vl-catch-all-apply
+      (function
+        (lambda ( / size )
+          (setq ADOStream (vlax-create-object "ADODB.Stream"))
+          (vlax-invoke ADOStream 'Open)
+          (vlax-put-property ADOStream 'type 1)
+          (vlax-invoke-method ADOStream 'loadfromfile filename)
+          (vlax-put-property ADOStream 'position 0)
+          (setq size (vlax-get ADOStream 'size))
+          (vlax-invoke-method ADOStream 'read (if (and (numberp len) (< 0 len size)) (fix len) -1))
+        )
+      )
+    )
+  )
+  (if ADOStream (vlax-release-object ADOStream))
+
+  (if (not (vl-catch-all-error-p result))
+    result
+  )
+)
+
+;*************************************************************************************************
+;* FIN api_call.lsp
+;*************************************************************************************************
