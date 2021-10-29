@@ -1,5 +1,5 @@
 (defun test_json_to_list ( / )
-  (load "json_util-v2.lsp")
+  (load "json_util.lsp")
 
   ;Array of 1 object
   (setq json1 "[{\"att_name0\":\"value0\",\"att_name1\":1,\"att_name2\":1,\"att_name3\":1.5},{\"att_name4\":1.0E+2,\"att_name5\":1E+2,\"att_name6\":-1,\"att_name7\":-1.5,\"att_name8\":1.0E-2},{\"att_name9\":1E-2,\"att_name10\":-1E-2}]")
